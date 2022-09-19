@@ -1,0 +1,154 @@
+1. Store raw data into hdfs location
+$ hadoop fs -mkdir hive-project
+$ hdfs dfs -put ./sales_order_data.csv hive-project/
+Table default.sales stats: [numFiles=1, numRows=0, totalSize=360233, rawDataSize=0]
+OK
+
+
+2. Create a internal hive table "sales_order_csv" which will store csv data sales_order_csv .. make sure to skip header row while creating table
+create database sales_region;
+use sales_region;
+
+create table sales
+(
+ordernumber INT,
+quantityordered INT,
+priceeach FLOAT,
+orderlinenumber INT,
+sales FLOAT,
+status varchar(25),
+qtr_id int,
+month_id smallint,
+year_id smallint,
+productline varchar(35),
+msrp int,
+productcode varchar(35),
+phone varchar(35),
+city varchar(55),  
+state varchar(55),
+postalcode varchar(20),
+country varchar(50),
+territory varchar(100),
+contactlastname varchar(255),
+contactfirstname varchar(255),
+dealsize varchar(50)
+)
+row format delimited fields terminated by ',';
+
+
+4. Load data from hdfs path into "sales_order_csv" 
+load data inpath 'hive-project/sales_order_data.csv' into table sales;
+
+# That actually inserted header row
+# Truncate table
+hive> truncate table sales;
+hive> alter table sales set TBLPROPERTIES ("skip.header.line.count"="1");
+
+#Run load command again
+
+5. Create an internal hive table which will store data in ORC format "sales_order_orc"
+create table sales_orc
+(
+ordernumber INT,
+quantityordered INT,
+priceeach FLOAT,
+orderlinenumber INT,
+sales FLOAT,
+status varchar(25),
+qtr_id int,
+month_id smallint,
+year_id smallint,
+productline varchar(35),
+msrp int,
+productcode varchar(35),
+phone varchar(35),
+city varchar(55),  
+state varchar(55),
+postalcode varchar(20),
+country varchar(50),
+territory varchar(100),
+contactlastname varchar(255),
+contactfirstname varchar(255),
+dealsize varchar(50)
+)
+row format delimited fields terminated by ',' stored as orc TBLPROPERTIES ("skip.header.line.count"="1"); 
+OK
+Time taken: 0.764 seconds
+
+
+6. Load data from "sales_order_csv" into "sales_order_orc"
+
+hive> load data local inpath './sales_order_data.csv' into table sales_orc; -- This will store malformed data
+Loading data to table default.sales_orc
+Table default.sales_orc stats: [numFiles=1, totalSize=360233]
+OK
+Time taken: 1.24 seconds
+
+hive> from sales insert overwrite table sales_orc select *; -- THis will store correct data
+
+
+7. Perform below menioned queries on "sales_order_orc" table :
+
+a. Calculatye total sales per year
+select year_id, SUM(sales) as total_sales from sales_orc group by year_id;
+
+Query ID = cloudera_20220919014949_e9b3dce8-1b47-4097-8b19-b2a7865ddd00
+Total jobs = 1
+Launching Job 1 out of 1
+Number of reduce tasks not specified. Defaulting to jobconf value of: 3
+In order to change the average load for a reducer (in bytes):
+  set hive.exec.reducers.bytes.per.reducer=<number>
+In order to limit the maximum number of reducers:
+  set hive.exec.reducers.max=<number>
+In order to set a constant number of reducers:
+  set mapreduce.job.reduces=<number>
+Starting Job = job_1663399321311_0006, Tracking URL = http://quickstart.cloudera:8088/proxy/application_1663399321311_0006/
+Kill Command = /usr/lib/hadoop/bin/hadoop job  -kill job_1663399321311_0006
+Hadoop job information for Stage-1: number of mappers: 1; number of reducers: 3
+2022-09-19 01:49:53,749 Stage-1 map = 0%,  reduce = 0%
+2022-09-19 01:50:18,891 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 6.39 sec
+2022-09-19 01:51:19,065 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 6.39 sec
+2022-09-19 01:51:27,204 Stage-1 map = 100%,  reduce = 67%, Cumulative CPU 20.05 sec
+2022-09-19 01:51:38,810 Stage-1 map = 100%,  reduce = 100%, Cumulative CPU 35.65 sec
+MapReduce Total cumulative CPU time: 35 seconds 650 msec
+Ended Job = job_1663399321311_0006
+MapReduce Jobs Launched: 
+Stage-Stage-1: Map: 1  Reduce: 3   Cumulative CPU: 35.65 sec   HDFS Read: 48464 HDFS Write: 70 SUCCESS
+Total MapReduce CPU Time Spent: 35 seconds 650 msec
+OK
+2004	4724162.593383789
+2005	1791486.7086791992
+2003	3516979.547241211
+Display all 478 possibilities? (y or n) n
+
+b. Find a product for which maximum orders were placed
+select productcode, COUNT(productcode) as total_order from sales_orc group by productcode order by total_order desc limit 5;
+
+MapReduce Jobs Launched: 
+Stage-Stage-1: Map: 1  Reduce: 3   Cumulative CPU: 24.42 sec   HDFS Read: 36555 HDFS Write: 3243 SUCCESS
+Stage-Stage-2: Map: 1  Reduce: 1   Cumulative CPU: 10.58 sec   HDFS Read: 9030 HDFS Write: 60 SUCCESS
+Total MapReduce CPU Time Spent: 35 seconds 0 msec
+OK
+S18_3232	52
+S18_2432	28
+S50_1392	28
+S18_1097	28
+S32_2509	28
+
+
+c. Calculate the total sales for each quarter
+select qtr_id, SUM(sales) as total_sale group by qtr_id;
+
+d. In which quarter sales was minimum
+select qtr_id, SUM(sales) as total_sales from sales_orc group by qtr_id order by total_order ASC limit 1;
+
+
+e. In which country sales was maximum and in which country sales was minimum
+select country, SUM(sales) as total_sales from sales_orc group by country order by total_sales ASC LIMIT 1;
+elect country, SUM(sales) as total_sales from sales_orc group by country order by total_sales DESC LIMIT 1;
+
+
+f. Calculate quartelry sales for each city
+select city, qtr_id, SUM(sales) as total_sales from sales_orc group by city,qtr_id order by total_order ASC limit 1;
+
+h. Find a month for each year in which maximum number of quantities were sold
