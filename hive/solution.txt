@@ -152,3 +152,20 @@ f. Calculate quartelry sales for each city
 select city, qtr_id, SUM(sales) as total_sales from sales_orc group by city,qtr_id order by total_order ASC limit 1;
 
 h. Find a month for each year in which maximum number of quantities were sold
+WITH cte1 AS (
+SELECT year_id, month_id, SUM(quantityordered) as total_quantity from sales_orc group by year_id, month_id
+), 
+cte2 AS (
+SELECT cte1.year_id, cte1.month_id,cte1.total_quantity, row_number() OVER(partition by year_id ORDER BY cte1.total_quantity DESC) as ranking
+FROM cte1
+) SELECT cte2.year_id, cte2.month_id, cte2.total_quantity from cte2 where ranking = 1;
+
+MapReduce Jobs Launched: 
+Stage-Stage-1: Map: 1  Reduce: 1   Cumulative CPU: 12.08 sec   HDFS Read: 30454 HDFS Write: 792 SUCCESS
+Stage-Stage-2: Map: 1  Reduce: 1   Cumulative CPU: 14.5 sec   HDFS Read: 8678 HDFS Write: 40 SUCCESS
+Total MapReduce CPU Time Spent: 26 seconds 580 msec
+OK
+2003	11	10179
+2004	11	10678
+2005	5	4357
+Time taken: 151.826 seconds, Fetched: 3 row(s)
